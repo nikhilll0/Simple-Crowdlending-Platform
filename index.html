@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crowdlending Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        section {
+            margin: 20px auto;
+            width: 90%;
+            max-width: 600px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        input, button, select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        .output {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f4f4f4;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Crowdlending Platform</h1>
+    </header>
+
+    <!-- Create Campaign Section -->
+    <section>
+        <h2>Create a Lending Campaign</h2>
+        <input type="number" id="campaignAmount" placeholder="Loan Amount (Wei)">
+        <input type="number" id="interestRate" placeholder="Interest Rate (%)">
+        <input type="number" id="loanTerm" placeholder="Loan Term (in seconds)">
+        <button onclick="createCampaign()">Create Campaign</button>
+        <div id="createOutput" class="output"></div>
+    </section>
+
+    <!-- Contribute Funds Section -->
+    <section>
+        <h2>Contribute Funds</h2>
+        <input type="number" id="contributeCampaignId" placeholder="Campaign ID">
+        <input type="number" id="contributeAmount" placeholder="Amount to Contribute (Wei)">
+        <button onclick="contributeFunds()">Contribute</button>
+        <div id="contributeOutput" class="output"></div>
+    </section>
+
+    <!-- Repay Loan Section -->
+    <section>
+        <h2>Repay Loan</h2>
+        <input type="number" id="repayCampaignId" placeholder="Campaign ID">
+        <input type="number" id="repayAmount" placeholder="Total Repayment Amount (Wei)">
+        <button onclick="repayLoan()">Repay Loan</button>
+        <div id="repayOutput" class="output"></div>
+    </section>
+
+    <!-- Withdraw Funds Section -->
+    <section>
+        <h2>Withdraw Funds</h2>
+        <input type="number" id="withdrawCampaignId" placeholder="Campaign ID">
+        <button onclick="withdrawFunds()">Withdraw</button>
+        <div id="withdrawOutput" class="output"></div>
+    </section>
+
+    <!-- Get Campaign Details -->
+    <section>
+        <h2>Get Campaign Details</h2>
+        <input type="number" id="detailsCampaignId" placeholder="Campaign ID">
+        <button onclick="getCampaignDetails()">Get Details</button>
+        <div id="detailsOutput" class="output"></div>
+    </section>
+
+    <script>
+        let web3;
+        let contract;
+
+        // Replace with your contract's address and ABI
+        const contractAddress = "0xd8b934580fcE35a11B58C6D73aDeE468a2833fa8";
+        const contractABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "borrower",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "totalAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "interestRate",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "loanTerm",
+				"type": "uint256"
+			}
+		],
+		"name": "CampaignCreated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "CampaignFullyFunded",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "contributeFunds",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_totalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_interestRate",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_loanTerm",
+				"type": "uint256"
+			}
+		],
+		"name": "createLendingCampaign",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "lender",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "FundingContributed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "LoanRepaid",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "repayLoan",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "withdrawFunds",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "campaignCounter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_campaignId",
+				"type": "uint256"
+			}
+		],
+		"name": "getCampaignDetails",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "borrower",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "fundedAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "interestRate",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "loanTerm",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "isFullyFunded",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isRepaid",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "lendingCampaigns",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "borrower",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "fundedAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "interestRate",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "loanTerm",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "startTime",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "isFullyFunded",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isRepaid",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "MAX_LOAN_AMOUNT",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "MIN_LOAN_AMOUNT",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+        // Initialize Web3
+        async function initWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await window.ethereum.request({ method: "eth_requestAccounts" });
+                contract = new web3.eth.Contract(contractABI, contractAddress);
+            } else {
+                alert("MetaMask is required. Please install it to use this DApp.");
+            }
+        }
+        window.addEventListener("load", initWeb3);
+
+        // Create Campaign
+        async function createCampaign() {
+            const amount = document.getElementById("campaignAmount").value;
+            const rate = document.getElementById("interestRate").value;
+            const term = document.getElementById("loanTerm").value;
+
+            try {
+                const accounts = await web3.eth.getAccounts();
+                await contract.methods.createLendingCampaign(amount, rate, term).send({ from: accounts[0] });
+                document.getElementById("createOutput").innerText = "Campaign created successfully!";
+            } catch (error) {
+                document.getElementById("createOutput").innerText = error.message;
+            }
+        }
+
+        // Contribute Funds
+        async function contributeFunds() {
+            const campaignId = document.getElementById("contributeCampaignId").value;
+            const amount = document.getElementById("contributeAmount").value;
+
+            try {
+                const accounts = await web3.eth.getAccounts();
+                await contract.methods.contributeFunds(campaignId).send({ from: accounts[0], value: amount });
+                document.getElementById("contributeOutput").innerText = "Contribution successful!";
+            } catch (error) {
+                document.getElementById("contributeOutput").innerText = error.message;
+            }
+        }
+
+        // Repay Loan
+        async function repayLoan() {
+            const campaignId = document.getElementById("repayCampaignId").value;
+            const amount = document.getElementById("repayAmount").value;
+
+            try {
+                const accounts = await web3.eth.getAccounts();
+                await contract.methods.repayLoan(campaignId).send({ from: accounts[0], value: amount });
+                document.getElementById("repayOutput").innerText = "Loan repaid successfully!";
+            } catch (error) {
+                document.getElementById("repayOutput").innerText = error.message;
+            }
+        }
+
+        // Withdraw Funds
+        async function withdrawFunds() {
+            const campaignId = document.getElementById("withdrawCampaignId").value;
+
+            try {
+                const accounts = await web3.eth.getAccounts();
+                await contract.methods.withdrawFunds(campaignId).send({ from: accounts[0] });
+                document.getElementById("withdrawOutput").innerText = "Funds withdrawn successfully!";
+            } catch (error) {
+                document.getElementById("withdrawOutput").innerText = error.message;
+            }
+        }
+
+        // Get Campaign Details
+        async function getCampaignDetails() {
+            const campaignId = document.getElementById("detailsCampaignId").value;
+
+            try {
+                const details = await contract.methods.getCampaignDetails(campaignId).call();
+                document.getElementById("detailsOutput").innerText = `
+                    Borrower: ${details[0]}
+                    Total Amount: ${details[1]} Wei
+                    Funded Amount: ${details[2]} Wei
+                    Interest Rate: ${details[3]}%
+                    Loan Term: ${details[4]} seconds
+                    Fully Funded: ${details[5]}
+                    Repaid: ${details[6]}
+                `;
+            } catch (error) {
+                document.getElementById("detailsOutput").innerText = error.message;
+            }
+        }
+    </script>
+</body>
+</html>
